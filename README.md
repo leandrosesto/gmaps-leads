@@ -10,10 +10,12 @@ Un Excel (o CSV) con una fila por negocio:
 
 | Columna | Qué es |
 |---|---|
-| Nombre, Dirección, Teléfono, Web | Datos públicos de la ficha en Google Maps |
-| WhatsApp (verificar) | Link `wa.me` armado con el teléfono. **Solo funciona si el número es celular y tiene WhatsApp**; los fijos no |
+| Nombre, Dirección, Teléfono | Datos públicos de la ficha en Google Maps |
+| WhatsApp (verificar) | Clic en "Abrir WhatsApp" y abre el chat (en WhatsApp Web si estás en la PC). **Solo funciona si el número es celular y tiene WhatsApp**; los fijos no |
+| Instagram | Clic en el `@usuario` y abre el perfil. Solo aparece si el negocio lo cargó como sitio web en Google Maps |
+| Web | Clic en el dominio y abre el sitio |
 | Rating | Estrellas de la ficha |
-| Google Maps | Link a la ficha |
+| Google Maps | Clic en "Ver en Maps" y abre la ficha |
 | Contactado, Fecha contacto, Respuesta, Notas | Vacías: son para que lleves el seguimiento |
 
 Se descartan los negocios cerrados definitivamente y los repetidos.

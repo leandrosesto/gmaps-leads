@@ -42,6 +42,15 @@ class ShortUrlTests(unittest.TestCase):
         self.assertEqual(g.short_maps_url("https://www.google.com/maps/place/X?hl=es"), "https://www.google.com/maps/place/X")
 
 
+class LinkLabelTests(unittest.TestCase):
+    def test_instagram_handle(self):
+        self.assertEqual(g.instagram_handle("http://www.instagram.com/kinesiakinesiologiamdq"), "@kinesiakinesiologiamdq")
+        self.assertEqual(g.instagram_handle("https://www.instagram.com/fballesteros.kine/?hl=es"), "@fballesteros.kine")
+
+    def test_domain_label(self):
+        self.assertEqual(g.domain_label("https://www.sanarkinesiologia.com.ar/contacto"), "sanarkinesiologia.com.ar")
+
+
 class OutputTests(unittest.TestCase):
     def test_writes_xlsx_and_csv(self):
         import tempfile

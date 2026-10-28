@@ -28,6 +28,7 @@ COLUMNS = [
     "Dirección",
     "Teléfono",
     "WhatsApp (verificar)",
+    "Instagram",
     "Web",
     "Rating",
     "Google Maps",
@@ -56,6 +57,25 @@ def whatsapp_link(phone: str | None) -> str:
     if len(digits) != 10:
         return ""
     return f"https://wa.me/549{digits}"
+
+
+def instagram_handle(url: str) -> str:
+    m = re.search(r"instagram\.com/([^/?#\s]+)", url, re.IGNORECASE)
+    return f"@{m.group(1)}" if m else url
+
+
+def domain_label(url: str) -> str:
+    m = re.match(r"^(?:https?://)?(?:www\.)?([^/?#\s]+)", url, re.IGNORECASE)
+    return m.group(1) if m else url
+
+
+# Columnas que en el Excel se muestran como texto corto clickeable
+LINK_LABELS = {
+    "WhatsApp (verificar)": lambda url: "Abrir WhatsApp",
+    "Instagram": instagram_handle,
+    "Web": domain_label,
+    "Google Maps": lambda url: "Ver en Maps",
+}
 
 
 def short_maps_url(url: str) -> str:
@@ -147,7 +167,8 @@ def scrape_place(page: Page, url: str, query: str) -> dict | None:
         "Dirección": address,
         "Teléfono": phone,
         "WhatsApp (verificar)": whatsapp_link(phone),
-        "Web": website,
+        "Instagram": website if "instagram.com" in website.lower() else "",
+        "Web": "" if "instagram.com" in website.lower() else website,
         "Rating": rating,
         "Google Maps": short_maps_url(page.url),
         "Contactado": "",
@@ -199,15 +220,16 @@ def write_xlsx(rows: list[dict], path: Path) -> None:
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="1F4E78")
-    maps_col = COLUMNS.index("Google Maps") + 1
+    link_cols = {COLUMNS.index(name) + 1: label for name, label in LINK_LABELS.items()}
     for row in rows:
         ws.append([row[c] for c in COLUMNS])
-        cell = ws.cell(row=ws.max_row, column=maps_col)
-        if cell.value:
-            cell.hyperlink = cell.value
-            cell.value = "Ver en Maps"
-            cell.font = Font(color="0563C1", underline="single")
-    widths = {"Nombre": 32, "Dirección": 40, "WhatsApp (verificar)": 34, "Web": 30, "Google Maps": 30, "Notas": 30}
+        for col, label in link_cols.items():
+            cell = ws.cell(row=ws.max_row, column=col)
+            if cell.value:
+                cell.hyperlink = cell.value
+                cell.value = label(cell.value)
+                cell.font = Font(color="0563C1", underline="single")
+    widths = {"Nombre": 32, "Dirección": 40, "Web": 24, "Instagram": 22, "Notas": 30}
     for idx, name in enumerate(COLUMNS, start=1):
         ws.column_dimensions[get_column_letter(idx)].width = widths.get(name, 16)
     ws.freeze_panes = "B2"
