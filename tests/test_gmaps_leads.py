@@ -30,6 +30,18 @@ class CleanTextTests(unittest.TestCase):
         self.assertEqual(g._clean_button_text(" 0223 667-6854"), "0223 667-6854")
 
 
+class ShortUrlTests(unittest.TestCase):
+    def test_uses_place_id(self):
+        url = "https://www.google.com/maps/place/Kinesio+ARM/data=!4m7!3m6!19sChIJwRwYCczfhJURlZZDo8DPFXg?authuser=0&hl=es"
+        self.assertEqual(
+            g.short_maps_url(url),
+            "https://www.google.com/maps/place/?q=place_id:ChIJwRwYCczfhJURlZZDo8DPFXg",
+        )
+
+    def test_fallback_strips_query(self):
+        self.assertEqual(g.short_maps_url("https://www.google.com/maps/place/X?hl=es"), "https://www.google.com/maps/place/X")
+
+
 class OutputTests(unittest.TestCase):
     def test_writes_xlsx_and_csv(self):
         import tempfile

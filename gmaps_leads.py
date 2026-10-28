@@ -58,6 +58,14 @@ def whatsapp_link(phone: str | None) -> str:
     return f"https://wa.me/549{digits}"
 
 
+def short_maps_url(url: str) -> str:
+    """Convierte el link largo de la ficha en uno corto basado en el place ID."""
+    m = re.search(r"!19s(ChIJ[\w-]+)", url)
+    if m:
+        return f"https://www.google.com/maps/place/?q=place_id:{m.group(1)}"
+    return url.split("?")[0]
+
+
 def _text(page: Page, selector: str) -> str:
     loc = page.locator(selector).first
     try:
@@ -141,7 +149,7 @@ def scrape_place(page: Page, url: str, query: str) -> dict | None:
         "WhatsApp (verificar)": whatsapp_link(phone),
         "Web": website,
         "Rating": rating,
-        "Google Maps": page.url.split("?")[0],
+        "Google Maps": short_maps_url(page.url),
         "Contactado": "",
         "Fecha contacto": "",
         "Respuesta": "",
@@ -191,8 +199,14 @@ def write_xlsx(rows: list[dict], path: Path) -> None:
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="1F4E78")
+    maps_col = COLUMNS.index("Google Maps") + 1
     for row in rows:
         ws.append([row[c] for c in COLUMNS])
+        cell = ws.cell(row=ws.max_row, column=maps_col)
+        if cell.value:
+            cell.hyperlink = cell.value
+            cell.value = "Ver en Maps"
+            cell.font = Font(color="0563C1", underline="single")
     widths = {"Nombre": 32, "Dirección": 40, "WhatsApp (verificar)": 34, "Web": 30, "Google Maps": 30, "Notas": 30}
     for idx, name in enumerate(COLUMNS, start=1):
         ws.column_dimensions[get_column_letter(idx)].width = widths.get(name, 16)
