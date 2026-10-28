@@ -19,7 +19,7 @@ from urllib.parse import quote
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
+from playwright.sync_api import Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
 
 MAX_RESULTS = 120
 COLUMNS = [
@@ -76,6 +76,33 @@ LINK_LABELS = {
     "Web": domain_label,
     "Google Maps": lambda url: "Ver en Maps",
 }
+
+
+_IG_RESERVED = {"p", "reel", "reels", "explore", "accounts", "sharer", "share", "stories", "tv", "direct", "embed", "web", "about", "legal"}
+
+
+def extract_instagram(hrefs: list[str]) -> str:
+    """Devuelve el perfil de Instagram más repetido entre los links de una página."""
+    counts: dict[str, int] = {}
+    for href in hrefs:
+        m = re.search(r"instagram\.com/([A-Za-z0-9._]+)", href, re.IGNORECASE)
+        if m and m.group(1).lower() not in _IG_RESERVED:
+            handle = m.group(1)
+            counts[handle] = counts.get(handle, 0) + 1
+    if not counts:
+        return ""
+    return f"https://www.instagram.com/{max(counts, key=counts.get)}/"
+
+
+def find_instagram_on_site(page: Page, url: str) -> str:
+    """Abre el sitio del negocio y busca su link de Instagram (sin loguearse en nada)."""
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(1200)
+        hrefs = page.eval_on_selector_all('a[href*="instagram.com"]', "els => els.map(e => e.href)")
+    except (PWTimeout, PWError):
+        return ""
+    return extract_instagram(hrefs)
 
 
 def short_maps_url(url: str) -> str:
@@ -179,13 +206,16 @@ def scrape_place(page: Page, url: str, query: str) -> dict | None:
     }
 
 
-def collect(queries: list[str], city: str, limit: int, only_phone: bool, headless: bool) -> list[dict]:
+def collect(
+    queries: list[str], city: str, limit: int, only_phone: bool, headless: bool, find_ig: bool = False
+) -> list[dict]:
     rows: list[dict] = []
     seen: set[tuple[str, str]] = set()
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=headless)
         context = browser.new_context(locale="es-AR", timezone_id="America/Argentina/Buenos_Aires")
         page = context.new_page()
+        site_page = context.new_page()
         try:
             for query in queries:
                 log.info("Buscando: %s en %s", query, city)
@@ -204,6 +234,8 @@ def collect(queries: list[str], city: str, limit: int, only_phone: bool, headles
                     if key in seen or (only_phone and not row["Teléfono"]):
                         continue
                     seen.add(key)
+                    if find_ig and row["Web"] and not row["Instagram"]:
+                        row["Instagram"] = find_instagram_on_site(site_page, row["Web"])
                     rows.append(row)
                     if idx % 10 == 0:
                         log.info("  %d/%d leídas, %d válidas", idx, len(links), len(rows))
@@ -253,6 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--csv", action="store_true", help="Exportar CSV en vez de Excel")
     p.add_argument("--only-phone", action="store_true", help="Descartar negocios sin teléfono")
     p.add_argument("--show", action="store_true", help="Mostrar el navegador mientras trabaja")
+    p.add_argument(
+        "--instagram",
+        action="store_true",
+        help="Buscar el Instagram en el sitio web de cada negocio (más lento, sin loguearse en nada)",
+    )
     return p
 
 
@@ -261,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.limit = max(1, min(args.limit, MAX_RESULTS))
 
-    rows = collect(args.queries, args.city, args.limit, args.only_phone, headless=not args.show)
+    rows = collect(args.queries, args.city, args.limit, args.only_phone, headless=not args.show, find_ig=args.instagram)
     if not rows:
         log.warning("No se encontraron negocios. Probá con --show para ver qué pasa.")
         return 0

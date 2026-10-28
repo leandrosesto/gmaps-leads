@@ -42,6 +42,22 @@ class ShortUrlTests(unittest.TestCase):
         self.assertEqual(g.short_maps_url("https://www.google.com/maps/place/X?hl=es"), "https://www.google.com/maps/place/X")
 
 
+class ExtractInstagramTests(unittest.TestCase):
+    def test_picks_most_frequent_profile(self):
+        hrefs = [
+            "https://www.instagram.com/kine.mdq/",
+            "https://instagram.com/kine.mdq?hl=es",
+            "https://www.instagram.com/otro/",
+            "https://www.instagram.com/p/ABC123/",
+            "https://www.instagram.com/sharer/sharer.php",
+        ]
+        self.assertEqual(g.extract_instagram(hrefs), "https://www.instagram.com/kine.mdq/")
+
+    def test_no_profile(self):
+        self.assertEqual(g.extract_instagram(["https://www.instagram.com/p/XYZ/", "https://www.instagram.com/explore/"]), "")
+        self.assertEqual(g.extract_instagram([]), "")
+
+
 class LinkLabelTests(unittest.TestCase):
     def test_instagram_handle(self):
         self.assertEqual(g.instagram_handle("http://www.instagram.com/kinesiakinesiologiamdq"), "@kinesiakinesiologiamdq")

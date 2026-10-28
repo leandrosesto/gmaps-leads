@@ -74,6 +74,7 @@ El resultado queda en `output/leads_<fecha>_<hora>.xlsx`.
 | `--csv` | Exporta CSV en vez de Excel |
 | `--out ruta/archivo.xlsx` | Elegir dónde guardar |
 | `--show` | Muestra el navegador mientras trabaja (útil si algo falla) |
+| `--instagram` | Además busca el Instagram en el sitio web de cada negocio (ver más abajo). Es más lento |
 
 Velocidad: unos 2 a 3 segundos por negocio. 40 negocios tardan aproximadamente 2 minutos.
 
@@ -82,6 +83,19 @@ Tip: para cubrir más negocios de un rubro, hacé búsquedas más específicas (
 ### 3. Usarlo desde otra computadora
 
 Repetí el paso 1 en esa máquina. No hay claves ni archivos de configuración que copiar.
+
+## Encontrar el Instagram (`--instagram`)
+
+Por defecto el Instagram sale solo si el negocio lo cargó como sitio web en Google Maps. Con `--instagram`, para los que tienen sitio web, el programa abre esa página y busca el link de Instagram (casi siempre está en el pie de página).
+
+```bash
+python gmaps_leads.py "kinesiólogo" --instagram
+```
+
+- No se loguea en Instagram ni usa tu cuenta. Solo lee el sitio web del negocio.
+- **Revisá el perfil antes de escribir.** A veces el sitio enlaza al perfil de otra persona (el diseñador web, por ejemplo) en vez del negocio. En una prueba con 15 kinesiólogos, uno de los perfiles hallados parecía personal.
+- Los negocios sin sitio web ni Instagram en Maps quedan sin Instagram: buscalos a mano por el nombre. Probé buscadores (DuckDuckGo, Bing) y no son confiables para esto: bloquean al programa o devuelven resultados que no corresponden.
+- Para escribirles por Instagram no necesitás que tu cuenta sea pública. Igual conviene que tu perfil esté completo y se vea profesional, porque lo van a mirar antes de responder.
 
 ## Cómo usar la lista para contactar
 
