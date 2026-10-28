@@ -22,6 +22,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 FILES_URL = "https://www.googleapis.com/drive/v3/files"
 UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink"
 CONFIG_DIR = Path.home() / ".gmaps-leads"
@@ -99,6 +100,31 @@ def upload_file(session: AuthorizedSession, path: Path, folder_id: str) -> dict:
     ).encode("utf-8") + path.read_bytes() + f"\r\n--{boundary}--".encode("utf-8")
     resp = session.post(UPLOAD_URL, data=body, headers={"Content-Type": f"multipart/related; boundary={boundary}"})
     return _check(resp, "subir el archivo")
+
+
+def list_sheets(session: AuthorizedSession, folder_id: str) -> list[dict]:
+    """Planillas .xlsx de la carpeta, ordenadas por nombre: [{id, name, modifiedTime}]."""
+    query = f"'{folder_id}' in parents and trashed = false and mimeType = '{XLSX_MIME}'"
+    params = {"q": query, "fields": "files(id,name,modifiedTime)", "orderBy": "name", "pageSize": 100}
+    return _check(session.get(FILES_URL, params=params), "listar las planillas").get("files", [])
+
+
+def download_file(session: AuthorizedSession, file_id: str) -> bytes:
+    resp = session.get(f"{FILES_URL}/{file_id}", params={"alt": "media"})
+    if resp.status_code >= 400:
+        _check(resp, "descargar la planilla")
+    return resp.content
+
+
+def update_file(session: AuthorizedSession, file_id: str, data: bytes, mime: str = XLSX_MIME) -> dict:
+    """Reemplaza el contenido de un archivo existente (mismo ID, mismo link)."""
+    resp = session.patch(
+        f"https://www.googleapis.com/upload/drive/v3/files/{file_id}",
+        params={"uploadType": "media", "fields": "id"},
+        data=data,
+        headers={"Content-Type": mime},
+    )
+    return _check(resp, "actualizar la planilla")
 
 
 def upload_to_drive(path: Path, folder_name: str = DEFAULT_FOLDER) -> str:

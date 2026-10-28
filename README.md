@@ -145,9 +145,12 @@ python gmaps_leads.py "kinesiólogo" --instagram
 
 El programa te ahorra el trabajo repetitivo, pero **el envío lo hacés vos**. No inicia sesión en Instagram ni manda nada por su cuenta: automatizar mensajes desde tu cuenta viola las reglas de Instagram y puede costarte el perfil.
 
+Trabaja directo sobre las planillas de tu carpeta **LEADS** de Drive (una por rubro) y el seguimiento queda anotado ahí, así lo ves desde cualquier PC. Requiere tener Drive configurado (sección anterior).
+
 ```bash
-python outreach.py                       # usa la planilla más reciente de output/
-python outreach.py output/leads_x.xlsx   # una planilla específica
+python outreach.py                       # te deja elegir la planilla de LEADS en Drive
+python outreach.py --rubro kinesiologo   # usa la que tenga ese texto en el nombre
+python outreach.py output/leads_x.xlsx   # una planilla local, sin Drive
 ```
 
 Para cada lead que tenga Instagram y no esté contactado:
@@ -155,17 +158,22 @@ Para cada lead que tenga Instagram y no esté contactado:
 2. Arma el mensaje con tu plantilla y te lo muestra.
 3. Con Enter, **abre su perfil** en tu navegador y **copia el mensaje** al portapapeles.
 4. Lo pegás en el DM (Ctrl+V), lo revisás y lo enviás vos.
-5. Confirmás con `s` y el programa anota `Sí`, la fecha y la variante usada en la planilla.
+5. Confirmás con `s` y el programa anota `Sí`, la fecha y la variante usada **en la planilla de Drive**.
+
+Cada vez que confirmás, el programa baja la última versión de la planilla, modifica solo la fila de ese lead (lo identifica por nombre y dirección, no por número de fila) y la vuelve a subir. Si la editaste desde otra PC o reordenaste filas, no pisa tus cambios.
 
 Teclas útiles: `s` salta un lead, `q` sale en cualquier momento. Podés cortar y retomar cuando quieras: solo muestra los pendientes.
 
-**Tope diario:** por defecto frena a los 15 contactos por día (`--daily-cap 10` para cambiarlo). Escribir de a pocos, a mano y con un detalle real es lo que mejor funciona y lo que protege tu cuenta.
+**Tope diario:** por defecto frena a los 15 contactos por día, sumando **todas las planillas de LEADS** (el límite es por tu cuenta, no por rubro). Se cambia con `--daily-cap 10`. Escribir de a pocos, a mano y con un detalle real es lo que mejor funciona y lo que protege tu cuenta.
 
 **Plantillas:** se editan en `mensajes.txt`. Separá las variantes con `---`; el programa las alterna y anota cuál usó en la columna **Notas**, así después comparás cuál responde más. Usá `{negocio}` y `{detalle}`, y poné entre `[[ ]]` lo que debe borrarse si no escribís un detalle. Editá los textos con tu voz y no afirmes nada que no puedas respaldar.
 
 **Notas:**
-- Cerrá la planilla en Excel antes de correrlo, si no, no puede guardar el seguimiento.
-- El seguimiento se guarda en la copia local de `output/`. Si trabajás desde otra PC, copiá la planilla actualizada o volvé a subirla a Drive a mano.
+- **Solo ve las planillas que subió este programa** (permiso `drive.file`), en la carpeta LEADS y en formato `.xlsx`. Si convertiste una planilla a "Hoja de cálculo de Google" (*Guardar como hoja de Google*), esa copia no aparece: trabajá sobre el `.xlsx` original.
+- **No cambies los encabezados** de las columnas ni borres Nombre, Dirección, Instagram, Contactado, Fecha contacto o Notas. Con eso reconoce cada lead.
+- **Si abrís la planilla en Drive mientras corre**, guardá tus cambios antes de confirmar el siguiente envío; si dos ediciones coinciden en el mismo instante, gana la última.
+- Si falla la subida a Drive (sin internet, por ejemplo), el programa se detiene para que no pierdas el registro de a quién escribiste.
+- Con una planilla local (`python outreach.py output/leads_x.xlsx`), cerrala en Excel antes: si está abierta, no puede guardar.
 
 ## Cómo usar la lista para contactar
 
