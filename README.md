@@ -2,25 +2,25 @@
 
 Genera una planilla de negocios de una ciudad (nombre, dirección, teléfono, link de WhatsApp, web, rating) a partir de Google Maps. Sirve para armar listas de prospectos por rubro y contactarlos **a mano, de forma personalizada**.
 
-Usa la API oficial de Google Places (New), no scrapea el HTML de Maps. Es más estable y no te bloquean la IP, pero necesita una API key (se crea una sola vez, paso 2).
+**100% gratis: sin API key y sin tarjeta.** Abre un navegador (Chromium, vía Playwright) y lee Google Maps como lo haría una persona.
 
 ## Qué obtenés
 
-Un Excel (o CSV) con una fila por negocio y estas columnas:
+Un Excel (o CSV) con una fila por negocio:
 
 | Columna | Qué es |
 |---|---|
-| Nombre, Dirección, Teléfono, Web | Datos públicos del negocio en Google Maps |
+| Nombre, Dirección, Teléfono, Web | Datos públicos de la ficha en Google Maps |
 | WhatsApp (verificar) | Link `wa.me` armado con el teléfono. **Solo funciona si el número es celular y tiene WhatsApp**; los fijos no |
-| Rating, Reseñas | Para priorizar |
+| Rating | Estrellas de la ficha |
 | Google Maps | Link a la ficha |
 | Contactado, Fecha contacto, Respuesta, Notas | Vacías: son para que lleves el seguimiento |
 
-Se descartan los negocios cerrados definitivamente y los repetidos entre rubros.
+Se descartan los negocios cerrados definitivamente y los repetidos.
 
 ## Paso a paso
 
-### 1. Instalar
+### 1. Instalar (una sola vez por computadora)
 
 Necesitás Python 3.10 o superior.
 
@@ -39,39 +39,16 @@ Activar el entorno:
 source .venv/bin/activate
 ```
 
-Instalar dependencias:
+Instalar dependencias y el navegador (descarga unos 150 MB):
 
 ```bash
 pip install -r requirements.txt
+python -m playwright install chromium
 ```
 
-### 2. Conseguir la API key de Google (una sola vez)
+El repositorio es privado: para clonarlo tenés que estar logueado en GitHub (`gh auth login`).
 
-1. Entrá a <https://console.cloud.google.com/> con tu cuenta de Google y creá un proyecto (por ejemplo `leads`).
-2. Activá la facturación del proyecto (te piden una tarjeta; Google da un uso gratuito mensual por producto y esta herramienta consume muy poco, pero **revisá los precios vigentes** antes de usarla mucho).
-3. Menú **APIs y servicios > Biblioteca**, buscá **Places API (New)** y tocá **Habilitar**.
-4. Menú **APIs y servicios > Credenciales > Crear credenciales > Clave de API**.
-5. Recomendado: en la clave, **Restricciones de API**, elegí solo *Places API (New)*.
-6. En **Facturación > Presupuestos y alertas**, creá una alerta de presupuesto chica (por ejemplo USD 5) para que no haya sorpresas.
-
-### 3. Configurar la clave
-
-```bash
-# Windows
-copy .env.example .env
-# Mac / Linux
-cp .env.example .env
-```
-
-Abrí `.env` y pegá la clave después del `=`:
-
-```
-GOOGLE_MAPS_API_KEY=AIza...
-```
-
-El archivo `.env` está en `.gitignore`: nunca se sube a GitHub. No pegues la clave en el código ni en el chat.
-
-### 4. Usarlo
+### 2. Usarlo
 
 Un rubro:
 
@@ -79,7 +56,7 @@ Un rubro:
 python gmaps_leads.py "kinesiólogo"
 ```
 
-Varios rubros a la vez, en otra ciudad:
+Varios rubros, en otra ciudad:
 
 ```bash
 python gmaps_leads.py "estudio contable" "inmobiliaria" --city "Necochea"
@@ -87,37 +64,40 @@ python gmaps_leads.py "estudio contable" "inmobiliaria" --city "Necochea"
 
 El resultado queda en `output/leads_<fecha>_<hora>.xlsx`.
 
-Opciones:
-
 | Opción | Para qué |
 |---|---|
 | `--city "Mar del Plata"` | Ciudad (es el valor por defecto) |
-| `--max 40` | Máximo de resultados por rubro. Google entrega hasta 60 por búsqueda |
+| `--max 40` | Máximo de negocios por rubro (default 40, tope 120) |
 | `--only-phone` | Descarta negocios sin teléfono |
 | `--csv` | Exporta CSV en vez de Excel |
 | `--out ruta/archivo.xlsx` | Elegir dónde guardar |
+| `--show` | Muestra el navegador mientras trabaja (útil si algo falla) |
 
-Tip: para cubrir más de 60 negocios de un rubro, hacé búsquedas más específicas (`"kinesiólogo deportivo"`, `"kinesiología respiratoria"`). El resultado se deduplica solo.
+Velocidad: unos 2 a 3 segundos por negocio. 40 negocios tardan aproximadamente 2 minutos.
 
-### 5. Usarlo desde otra computadora
+Tip: para cubrir más negocios de un rubro, hacé búsquedas más específicas (`"kinesiólogo deportivo"`, `"kinesiología respiratoria"`). Los repetidos se descartan solos.
 
-Repetí los pasos 1 y 3 en esa máquina (clonar, crear el entorno, instalar, copiar tu `.env`). El repositorio es privado: para clonarlo tenés que estar logueado en GitHub.
+### 3. Usarlo desde otra computadora
+
+Repetí el paso 1 en esa máquina. No hay claves ni archivos de configuración que copiar.
 
 ## Cómo usar la lista para contactar
 
-- Mirá cada negocio (web, Instagram, reseñas) antes de escribir. Un mensaje que menciona algo concreto del local funciona mucho mejor que uno genérico.
+- Mirá cada negocio (web, Instagram) antes de escribir. Un mensaje que menciona algo concreto del local funciona mucho mejor que uno genérico.
 - Empezá con una pregunta corta, sin links ni adjuntos.
 - Escribí a mano y pocos por día. El envío masivo desde WhatsApp es la forma más rápida de que bloqueen tu número.
 - Anotá en las columnas de seguimiento a quién escribiste y qué respondió.
+
+## Límites y avisos
+
+- **Puede dejar de funcionar.** Lee la página de Google Maps, no una API. Si Google cambia su diseño, hay que actualizar los selectores en `gmaps_leads.py` (`scrape_place`).
+- **Términos de uso.** Google no permite automatizar Maps. Usalo con volúmenes bajos y para tu uso propio. Con pocas decenas de negocios por vez no tuve problemas, pero si Google muestra un captcha, esperá un rato o bajá `--max`.
+- Los datos son los de Google Maps y pueden estar desactualizados.
+- Los teléfonos fijos no tienen WhatsApp: el link se arma para todos los números y hay que verificarlo.
+- Los resultados dependen de la sesión de Google (ubicación, idioma): pueden variar entre corridas.
 
 ## Desarrollo
 
 ```bash
 python -m unittest discover -s tests -v
 ```
-
-## Límites y avisos
-
-- Los datos son los que figuran en Google Maps. Pueden estar desactualizados.
-- Los teléfonos fijos no tienen WhatsApp. El link se arma para todos los números y hay que verificarlo.
-- Revisá los términos de uso de la API de Google y la normativa de datos personales aplicable antes de usar la lista a gran escala.

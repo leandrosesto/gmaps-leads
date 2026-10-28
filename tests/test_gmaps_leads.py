@@ -1,57 +1,46 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import gmaps_leads as g
 
 
 class WhatsappLinkTests(unittest.TestCase):
-    def test_inserts_mobile_nine(self):
-        self.assertEqual(g.whatsapp_link("+54 223 456-7890"), "https://wa.me/5492234567890")
+    def test_landline_style_number(self):
+        self.assertEqual(g.whatsapp_link("0223 667-6854"), "https://wa.me/5492236676854")
 
-    def test_keeps_existing_nine(self):
+    def test_number_with_15(self):
+        self.assertEqual(g.whatsapp_link("0223 15-567-1515"), "https://wa.me/5492235671515")
+
+    def test_number_without_leading_zero(self):
+        self.assertEqual(g.whatsapp_link("223 15 567 1515"), "https://wa.me/5492235671515")
+
+    def test_international_format(self):
+        self.assertEqual(g.whatsapp_link("+54 223 456-7890"), "https://wa.me/5492234567890")
         self.assertEqual(g.whatsapp_link("+54 9 223 456-7890"), "https://wa.me/5492234567890")
 
-    def test_empty(self):
-        self.assertEqual(g.whatsapp_link(None), "")
+    def test_invalid_or_empty(self):
+        self.assertEqual(g.whatsapp_link(""), "")
+        self.assertEqual(g.whatsapp_link("0800 222 3333 44"), "")
 
 
-class SearchTests(unittest.TestCase):
-    def _page(self, ids, token=None):
-        data = {"places": [{"id": i, "displayName": {"text": f"N{i}"}, "nationalPhoneNumber": "0223 1"} for i in ids]}
-        if token:
-            data["nextPageToken"] = token
-        resp = MagicMock(status_code=200)
-        resp.json.return_value = data
-        return resp
+class CleanTextTests(unittest.TestCase):
+    def test_strips_icon_prefix(self):
+        self.assertEqual(g._clean_button_text(" 0223 667-6854"), "0223 667-6854")
 
-    @patch("gmaps_leads.time.sleep")
-    def test_pagination_and_limit(self, _sleep):
-        session = MagicMock()
-        session.post.side_effect = [self._page(["a", "b"], "t1"), self._page(["c", "d"])]
-        rows = g.search("k", "q", "Mar del Plata", 3, session)
-        self.assertEqual([r["id"] for r in rows], ["a", "b", "c"])
 
-    @patch("gmaps_leads.search")
-    def test_dedup_and_closed(self, search):
-        base = {"Teléfono": "1"}
-        search.return_value = [
-            {**base, "id": "1", "_status": "OPERATIONAL"},
-            {**base, "id": "1", "_status": "OPERATIONAL"},
-            {**base, "id": "2", "_status": "CLOSED_PERMANENTLY"},
-        ]
-        rows = g.collect("k", ["q"], "c", 60, False)
-        self.assertEqual([r["id"] for r in rows], ["1"])
+class OutputTests(unittest.TestCase):
+    def test_writes_xlsx_and_csv(self):
+        import tempfile
 
-    def test_api_error_message(self):
-        session = MagicMock()
-        resp = MagicMock(status_code=403, text="")
-        resp.json.return_value = {"error": {"message": "API key not valid"}}
-        session.post.return_value = resp
-        with self.assertRaisesRegex(g.ApiError, "API key not valid"):
-            g.search("k", "q", "c", 20, session)
+        row = {c: "" for c in g.COLUMNS}
+        row["Nombre"] = "Test"
+        with tempfile.TemporaryDirectory() as tmp:
+            g.write_xlsx([row], Path(tmp) / "a.xlsx")
+            g.write_csv([row], Path(tmp) / "a.csv")
+            self.assertTrue((Path(tmp) / "a.xlsx").stat().st_size > 0)
+            self.assertIn("Test", (Path(tmp) / "a.csv").read_text(encoding="utf-8-sig"))
 
 
 if __name__ == "__main__":

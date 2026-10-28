@@ -1,4 +1,4 @@
-"""Busca negocios en Google Maps (Places API New) y exporta una planilla de leads.
+"""Busca negocios en Google Maps con un navegador automatizado (sin API ni tarjeta).
 
 Uso:
     python gmaps_leads.py "kinesiólogo" "clínica" --city "Mar del Plata"
@@ -8,39 +8,20 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
-import os
+import random
+import re
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
-import requests
-from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-API_URL = "https://places.googleapis.com/v1/places:searchText"
-FIELD_MASK = ",".join(
-    [
-        "places.id",
-        "places.displayName",
-        "places.formattedAddress",
-        "places.nationalPhoneNumber",
-        "places.internationalPhoneNumber",
-        "places.websiteUri",
-        "places.rating",
-        "places.userRatingCount",
-        "places.googleMapsUri",
-        "places.businessStatus",
-        "nextPageToken",
-    ]
-)
-PAGE_SIZE = 20  # máximo permitido por la API
-MAX_PAGES = 3  # Google devuelve hasta 60 resultados por búsqueda
-MAX_RETRIES = 4
-TIMEOUT = 30
-
+MAX_RESULTS = 120
 COLUMNS = [
     "Nombre",
     "Rubro buscado",
@@ -49,7 +30,6 @@ COLUMNS = [
     "WhatsApp (verificar)",
     "Web",
     "Rating",
-    "Reseñas",
     "Google Maps",
     "Contactado",
     "Fecha contacto",
@@ -60,106 +40,146 @@ COLUMNS = [
 log = logging.getLogger("gmaps_leads")
 
 
-class ApiError(RuntimeError):
-    """Error devuelto por la API de Google con un mensaje legible."""
-
-
-def whatsapp_link(international_phone: str | None) -> str:
-    """Arma un link wa.me. Solo sirve si el número es celular y tiene WhatsApp."""
-    if not international_phone:
+def whatsapp_link(phone: str | None) -> str:
+    """Arma un link wa.me desde un teléfono argentino. Solo sirve si es celular con WhatsApp."""
+    if not phone:
         return ""
-    digits = "".join(ch for ch in international_phone if ch.isdigit())
-    if digits.startswith("54") and not digits.startswith("549"):
-        digits = "549" + digits[2:]  # los celulares argentinos llevan el 9
-    return f"https://wa.me/{digits}" if digits else ""
+    text = phone.strip()
+    if text.startswith("+54"):
+        digits = re.sub(r"\D", "", text)
+        if not digits.startswith("549"):
+            digits = "549" + digits[2:]
+        return f"https://wa.me/{digits}"
+    # Formato local: 0223 15-456-7890 / 223 456-7890 -> quitar 0 inicial y el 15
+    m = re.match(r"^0?(\d{2,4})[\s-]+15[\s-]*([\d\s-]{6,10})$", text)
+    digits = (m.group(1) + re.sub(r"\D", "", m.group(2))) if m else re.sub(r"\D", "", text).lstrip("0")
+    if len(digits) != 10:
+        return ""
+    return f"https://wa.me/549{digits}"
 
 
-def parse_place(place: dict, query: str) -> dict:
+def _text(page: Page, selector: str) -> str:
+    loc = page.locator(selector).first
+    try:
+        return (loc.inner_text(timeout=1500) or "").strip()
+    except PWTimeout:
+        return ""
+
+
+def _clean_button_text(raw: str) -> str:
+    """Los botones de la ficha traen un ícono privado de Unicode al principio."""
+    return re.sub(r"^[-\s]+", "", raw).strip()
+
+
+def accept_or_reject_consent(page: Page) -> None:
+    """Si Google muestra el cartel de cookies, lo rechaza."""
+    for label in ("Rechazar todo", "Reject all"):
+        btn = page.get_by_role("button", name=label)
+        if btn.count():
+            btn.first.click()
+            page.wait_for_load_state("domcontentloaded")
+            return
+
+
+def collect_place_links(page: Page, query: str, city: str, limit: int) -> list[str]:
+    url = f"https://www.google.com/maps/search/{quote(f'{query} en {city}')}?hl=es&gl=ar"
+    page.goto(url, wait_until="domcontentloaded")
+    accept_or_reject_consent(page)
+    try:
+        page.wait_for_selector('div[role="feed"], h1', timeout=20000)
+    except PWTimeout:
+        log.warning("No cargó la lista de resultados para '%s'", query)
+        return []
+
+    feed = page.locator('div[role="feed"]')
+    if not feed.count():
+        # Google fue directo a una única ficha
+        return [page.url]
+
+    links: list[str] = []
+    stale_rounds = 0
+    while len(links) < limit and stale_rounds < 4:
+        hrefs = page.eval_on_selector_all(
+            'div[role="feed"] a[href*="/maps/place/"]', "els => els.map(e => e.href)"
+        )
+        new = [h for h in dict.fromkeys(hrefs) if h not in links]
+        links += new
+        stale_rounds = 0 if new else stale_rounds + 1
+        if page.get_by_text("Llegaste al final de la lista").count():
+            break
+        feed.first.evaluate("el => el.scrollBy(0, el.scrollHeight)")
+        time.sleep(random.uniform(1.2, 2.0))
+    return links[:limit]
+
+
+def scrape_place(page: Page, url: str, query: str) -> dict | None:
+    page.goto(url, wait_until="domcontentloaded")
+    try:
+        page.wait_for_selector("h1", timeout=15000)
+    except PWTimeout:
+        return None
+    name = _text(page, "h1")
+    if not name:
+        return None
+    address = _clean_button_text(_text(page, 'button[data-item-id="address"]'))
+    phone = _clean_button_text(_text(page, 'button[data-item-id^="phone"]'))
+    website = ""
+    site = page.locator('a[data-item-id="authority"]').first
+    if site.count():
+        website = site.get_attribute("href") or ""
+    rating = ""
+    stars = page.locator('span[role="img"][aria-label*="estrella"]').first
+    if stars.count():
+        m = re.search(r"([\d,\.]+)\s*estrella", stars.get_attribute("aria-label") or "")
+        rating = m.group(1).replace(",", ".") if m else ""
+    closed = bool(page.get_by_text("Cerrado permanentemente").count())
     return {
-        "id": place.get("id", ""),
-        "Nombre": (place.get("displayName") or {}).get("text", ""),
+        "Nombre": name,
         "Rubro buscado": query,
-        "Dirección": place.get("formattedAddress", ""),
-        "Teléfono": place.get("nationalPhoneNumber", ""),
-        "WhatsApp (verificar)": whatsapp_link(place.get("internationalPhoneNumber")),
-        "Web": place.get("websiteUri", ""),
-        "Rating": place.get("rating", ""),
-        "Reseñas": place.get("userRatingCount", ""),
-        "Google Maps": place.get("googleMapsUri", ""),
+        "Dirección": address,
+        "Teléfono": phone,
+        "WhatsApp (verificar)": whatsapp_link(phone),
+        "Web": website,
+        "Rating": rating,
+        "Google Maps": page.url.split("?")[0],
         "Contactado": "",
         "Fecha contacto": "",
         "Respuesta": "",
         "Notas": "",
-        "_status": place.get("businessStatus", ""),
+        "_closed": closed,
     }
 
 
-def _post(session: requests.Session, api_key: str, body: dict) -> dict:
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": FIELD_MASK,
-    }
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            resp = session.post(API_URL, json=body, headers=headers, timeout=TIMEOUT)
-        except requests.RequestException as exc:
-            if attempt == MAX_RETRIES:
-                raise ApiError(f"No se pudo conectar con Google: {exc}") from exc
-            time.sleep(2**attempt)
-            continue
-        if resp.status_code == 200:
-            return resp.json()
-        if resp.status_code in (429, 500, 502, 503, 504) and attempt < MAX_RETRIES:
-            wait = 2**attempt
-            log.warning("HTTP %s, reintento en %ss", resp.status_code, wait)
-            time.sleep(wait)
-            continue
-        try:
-            detail = resp.json().get("error", {}).get("message", resp.text)
-        except ValueError:
-            detail = resp.text
-        raise ApiError(f"Google respondió {resp.status_code}: {detail}")
-    raise ApiError("Se agotaron los reintentos")
-
-
-def search(api_key: str, query: str, city: str, limit: int, session: requests.Session) -> list[dict]:
-    """Devuelve hasta `limit` lugares (tope 60) para '<query> en <city>'."""
-    text = f"{query} en {city}"
-    results: list[dict] = []
-    token: str | None = None
-    for _ in range(MAX_PAGES):
-        body = {
-            "textQuery": text,
-            "languageCode": "es",
-            "regionCode": "AR",
-            "pageSize": min(PAGE_SIZE, limit - len(results)),
-        }
-        if token:
-            body["pageToken"] = token
-        data = _post(session, api_key, body)
-        results += [parse_place(p, query) for p in data.get("places", [])]
-        token = data.get("nextPageToken")
-        if not token or len(results) >= limit:
-            break
-        time.sleep(1)  # el token de página tarda un instante en activarse
-    return results[:limit]
-
-
-def collect(api_key: str, queries: list[str], city: str, limit: int, only_phone: bool) -> list[dict]:
-    seen: set[str] = set()
+def collect(queries: list[str], city: str, limit: int, only_phone: bool, headless: bool) -> list[dict]:
     rows: list[dict] = []
-    with requests.Session() as session:
-        for query in queries:
-            log.info("Buscando: %s en %s", query, city)
-            for row in search(api_key, query, city, limit, session):
-                if row["id"] in seen or row["_status"] == "CLOSED_PERMANENTLY":
-                    continue
-                if only_phone and not row["Teléfono"]:
-                    continue
-                seen.add(row["id"])
-                rows.append(row)
-            log.info("Acumulados: %d negocios únicos", len(rows))
+    seen: set[tuple[str, str]] = set()
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=headless)
+        context = browser.new_context(locale="es-AR", timezone_id="America/Argentina/Buenos_Aires")
+        page = context.new_page()
+        try:
+            for query in queries:
+                log.info("Buscando: %s en %s", query, city)
+                links = collect_place_links(page, query, city, limit)
+                log.info("%d fichas encontradas, leyendo datos...", len(links))
+                for idx, link in enumerate(links, start=1):
+                    try:
+                        row = scrape_place(page, link, query)
+                    except PWTimeout:
+                        log.warning("Timeout en la ficha %d, se omite", idx)
+                        continue
+                    time.sleep(random.uniform(0.8, 1.8))
+                    if not row or row["_closed"]:
+                        continue
+                    key = (row["Nombre"].lower(), row["Dirección"].lower())
+                    if key in seen or (only_phone and not row["Teléfono"]):
+                        continue
+                    seen.add(key)
+                    rows.append(row)
+                    if idx % 10 == 0:
+                        log.info("  %d/%d leídas, %d válidas", idx, len(links), len(rows))
+        finally:
+            browser.close()
     return rows
 
 
@@ -192,30 +212,22 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Genera una lista de leads desde Google Maps.")
     p.add_argument("queries", nargs="+", help='Rubros a buscar, por ejemplo: "kinesiólogo" "clínica"')
     p.add_argument("--city", default="Mar del Plata", help="Ciudad (default: Mar del Plata)")
-    p.add_argument("--max", type=int, default=60, dest="limit", help="Máximo por rubro, tope 60 (default: 60)")
+    p.add_argument("--max", type=int, default=40, dest="limit", help="Máximo por rubro (default: 40)")
     p.add_argument("--out", type=Path, help="Archivo de salida (default: output/leads_<fecha>.xlsx)")
     p.add_argument("--csv", action="store_true", help="Exportar CSV en vez de Excel")
     p.add_argument("--only-phone", action="store_true", help="Descartar negocios sin teléfono")
+    p.add_argument("--show", action="store_true", help="Mostrar el navegador mientras trabaja")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = build_parser().parse_args(argv)
-    load_dotenv()
-    api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
-    if not api_key:
-        log.error("Falta GOOGLE_MAPS_API_KEY. Copiá .env.example a .env y pegá tu clave (ver README).")
-        return 1
-    args.limit = max(1, min(args.limit, PAGE_SIZE * MAX_PAGES))
+    args.limit = max(1, min(args.limit, MAX_RESULTS))
 
-    try:
-        rows = collect(api_key, args.queries, args.city, args.limit, args.only_phone)
-    except ApiError as exc:
-        log.error("%s", exc)
-        return 1
+    rows = collect(args.queries, args.city, args.limit, args.only_phone, headless=not args.show)
     if not rows:
-        log.warning("No se encontraron negocios.")
+        log.warning("No se encontraron negocios. Probá con --show para ver qué pasa.")
         return 0
 
     ext = ".csv" if args.csv else ".xlsx"
