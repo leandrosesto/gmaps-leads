@@ -25,7 +25,7 @@ Se descartan los negocios cerrados definitivamente y los repetidos entre rubros.
 Necesitás Python 3.10 o superior.
 
 ```bash
-git clone https://github.com/<TU-USUARIO>/gmaps-leads.git
+git clone https://github.com/leandrosesto/gmaps-leads.git
 cd gmaps-leads
 python -m venv .venv
 ```
