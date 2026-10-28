@@ -84,6 +84,50 @@ Tip: para cubrir más negocios de un rubro, hacé búsquedas más específicas (
 
 Repetí el paso 1 en esa máquina. No hay claves ni archivos de configuración que copiar.
 
+## Guardar las planillas en Google Drive (carpeta LEADS)
+
+Con esto, cada planilla que genere el programa se sube sola a una carpeta **LEADS** de tu Drive, y la abrís desde cualquier PC en <https://drive.google.com>. Es gratis y **no pide tarjeta**. Se configura una sola vez.
+
+El programa pide el permiso mínimo (`drive.file`): solo ve los archivos y carpetas que él mismo crea, nunca el resto de tu Drive.
+
+### Configuración (una sola vez)
+
+Los nombres de los menús de Google cambian de vez en cuando; si algo no coincide, buscá el equivalente.
+
+1. Entrá a <https://console.cloud.google.com/> con tu cuenta de Google y creá un proyecto (por ejemplo `leads`). **No hace falta activar facturación.**
+2. **APIs y servicios > Biblioteca**: buscá **Google Drive API** y tocá **Habilitar**.
+3. **APIs y servicios > Pantalla de consentimiento de OAuth** (o *Google Auth Platform*): tipo de usuario **Externo**, poné un nombre de app (por ejemplo `gmaps-leads`) y tu mail. En **Usuarios de prueba**, agregá tu mismo Gmail.
+4. En la misma pantalla, pasá la app a **"En producción"** (*Publish app*). Si la dejás en "Prueba", Google te pide volver a iniciar sesión cada 7 días. Como el programa solo usa el permiso `drive.file`, no necesita verificación de Google.
+5. **Credenciales > Crear credenciales > ID de cliente de OAuth**, tipo **Aplicación de escritorio**. Descargá el JSON y guardalo como `credentials.json` en la carpeta del proyecto (o en `~/.gmaps-leads/credentials.json`). Este archivo no se sube a GitHub.
+6. Iniciá sesión una vez:
+
+```bash
+python drive_upload.py --login
+```
+
+Se abre el navegador, elegís tu cuenta y aceptás. Si Google avisa "app no verificada", tocá *Configuración avanzada > Ir a gmaps-leads*. Al terminar, se crea la carpeta **LEADS** en tu Drive.
+
+### Uso
+
+Nada cambia: corrés el scraper y, si Drive está configurado, la planilla se sube sola y el programa muestra el link.
+
+```bash
+python gmaps_leads.py "kinesiólogo" --instagram
+```
+
+| Opción | Para qué |
+|---|---|
+| `--no-drive` | No subir a Drive (queda solo en `output/`) |
+| `--drive-folder "OTRA"` | Usar otra carpeta en vez de LEADS |
+
+Los archivos se llaman `leads_<rubro>_<fecha>_<hora>.xlsx`. Si la subida falla (sin internet, por ejemplo), la planilla igual queda guardada en `output/`.
+
+### Detalles a tener en cuenta
+
+- **Carpeta LEADS existente:** como el programa solo ve lo que él creó, **no va a encontrar una carpeta LEADS que hayas creado a mano** y creará otra con el mismo nombre. Para evitar duplicados, borrá o renombrá la tuya antes de la primera subida, o mové los archivos viejos a la que cree el programa.
+- **Editar desde cualquier PC:** en Drive, clic derecho sobre el archivo > *Abrir con > Hojas de cálculo de Google*. Los hipervínculos siguen funcionando. Si lo editás ahí, el cambio queda en Drive, no en la copia de `output/`.
+- **Otra computadora:** repetí la instalación (paso 1), copiá tu `credentials.json` y corré `python drive_upload.py --login` una vez en esa PC.
+
 ## Encontrar el Instagram (`--instagram`)
 
 Por defecto el Instagram sale solo si el negocio lo cargó como sitio web en Google Maps. Con `--instagram`, para los que tienen sitio web, el programa abre esa página y busca el link de Instagram (casi siempre está en el pie de página).

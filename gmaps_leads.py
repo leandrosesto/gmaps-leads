@@ -290,7 +290,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Buscar el Instagram en el sitio web de cada negocio (más lento, sin loguearse en nada)",
     )
+    p.add_argument("--no-drive", action="store_true", help="No subir la planilla a Google Drive")
+    p.add_argument("--drive-folder", default="LEADS", help="Carpeta de Drive donde se sube (default: LEADS)")
     return p
+
+
+def slugify(text: str) -> str:
+    """'Kinesiólogo' -> 'kinesiologo' para usar en nombres de archivo."""
+    import unicodedata
+
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or "leads"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -304,11 +314,32 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     ext = ".csv" if args.csv else ".xlsx"
-    out = args.out or Path("output") / f"leads_{datetime.now():%Y%m%d_%H%M}{ext}"
+    out = args.out or Path("output") / f"leads_{slugify(args.queries[0])}_{datetime.now():%Y%m%d_%H%M}{ext}"
     out.parent.mkdir(parents=True, exist_ok=True)
     (write_csv if out.suffix == ".csv" else write_xlsx)(rows, out)
     log.info("Listo: %d negocios guardados en %s", len(rows), out)
+
+    if not args.no_drive:
+        upload_if_configured(out, args.drive_folder)
     return 0
+
+
+def upload_if_configured(path: Path, folder: str) -> None:
+    """Sube el archivo a Drive si hay credenciales configuradas. Un fallo no pierde el archivo local."""
+    try:
+        import drive_upload
+    except ImportError:
+        log.warning("Faltan librerías de Google (pip install -r requirements.txt). Se omite la subida a Drive.")
+        return
+    if not (drive_upload.find_credentials() or drive_upload.TOKEN_PATH.is_file()):
+        log.info("Drive no configurado: la planilla quedó solo en tu PC (ver README, sección Google Drive).")
+        return
+    try:
+        link = drive_upload.upload_to_drive(path, folder)
+    except Exception as exc:  # cualquier fallo de red/auth no debe tirar abajo el resultado ya guardado
+        log.error("No se pudo subir a Drive: %s. El archivo local está en %s", exc, path)
+        return
+    log.info("Subido a Drive (carpeta %s): %s", folder, link)
 
 
 if __name__ == "__main__":
