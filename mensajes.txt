@@ -1,0 +1,16 @@
+# Plantillas de primer mensaje. Separá las variantes con una línea que diga ---
+# Las líneas que empiezan con # se ignoran.
+#
+# Variables:  {negocio}  nombre del negocio (sale de la planilla)
+#             {detalle}  algo real que viste en su perfil (el programa te lo pregunta)
+# Lo que va entre [[ ]] se borra solo si no escribís un detalle.
+#
+# El programa alterna las variantes y anota cuál usó en la columna Notas,
+# así después podés comparar cuál respondió más.
+#
+# IMPORTANTE: editá estos textos con tu voz y con datos que puedas respaldar.
+# Si mencionás un caso o un número, tiene que ser verdad y verificable.
+
+Hola! Soy Leandro, de Mar del Plata. [[Vi {detalle}. ]]Una pregunta rápida: ¿en {negocio} la facturación a obras sociales la arman a mano o ya la tienen resuelta?
+---
+Hola! Soy Leandro, de Mar del Plata. Ayudé a un centro de salud de acá a dejar de armar planillas a mano y recuperar horas de trabajo por mes. [[Vi {detalle} y ]]me dio curiosidad: ¿cómo manejan hoy la facturación en {negocio}? Si no es un tema para ustedes, sin problema.

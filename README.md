@@ -141,6 +141,32 @@ python gmaps_leads.py "kinesiólogo" --instagram
 - Los negocios sin sitio web ni Instagram en Maps quedan sin Instagram: buscalos a mano por el nombre. Probé buscadores (DuckDuckGo, Bing) y no son confiables para esto: bloquean al programa o devuelven resultados que no corresponden.
 - Para escribirles por Instagram no necesitás que tu cuenta sea pública. Igual conviene que tu perfil esté completo y se vea profesional, porque lo van a mirar antes de responder.
 
+## Contactar por Instagram en modo asistido (`outreach.py`)
+
+El programa te ahorra el trabajo repetitivo, pero **el envío lo hacés vos**. No inicia sesión en Instagram ni manda nada por su cuenta: automatizar mensajes desde tu cuenta viola las reglas de Instagram y puede costarte el perfil.
+
+```bash
+python outreach.py                       # usa la planilla más reciente de output/
+python outreach.py output/leads_x.xlsx   # una planilla específica
+```
+
+Para cada lead que tenga Instagram y no esté contactado:
+1. Te muestra el negocio y te pregunta un **detalle personal** que viste en su perfil (o Enter para omitirlo).
+2. Arma el mensaje con tu plantilla y te lo muestra.
+3. Con Enter, **abre su perfil** en tu navegador y **copia el mensaje** al portapapeles.
+4. Lo pegás en el DM (Ctrl+V), lo revisás y lo enviás vos.
+5. Confirmás con `s` y el programa anota `Sí`, la fecha y la variante usada en la planilla.
+
+Teclas útiles: `s` salta un lead, `q` sale en cualquier momento. Podés cortar y retomar cuando quieras: solo muestra los pendientes.
+
+**Tope diario:** por defecto frena a los 15 contactos por día (`--daily-cap 10` para cambiarlo). Escribir de a pocos, a mano y con un detalle real es lo que mejor funciona y lo que protege tu cuenta.
+
+**Plantillas:** se editan en `mensajes.txt`. Separá las variantes con `---`; el programa las alterna y anota cuál usó en la columna **Notas**, así después comparás cuál responde más. Usá `{negocio}` y `{detalle}`, y poné entre `[[ ]]` lo que debe borrarse si no escribís un detalle. Editá los textos con tu voz y no afirmes nada que no puedas respaldar.
+
+**Notas:**
+- Cerrá la planilla en Excel antes de correrlo, si no, no puede guardar el seguimiento.
+- El seguimiento se guarda en la copia local de `output/`. Si trabajás desde otra PC, copiá la planilla actualizada o volvé a subirla a Drive a mano.
+
 ## Cómo usar la lista para contactar
 
 - Mirá cada negocio (web, Instagram) antes de escribir. Un mensaje que menciona algo concreto del local funciona mucho mejor que uno genérico.
